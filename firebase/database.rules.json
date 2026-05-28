@@ -1,0 +1,13 @@
+{
+  "rules": {
+    "sessions": {
+      "$sessionId": {
+        ".read": true,
+        ".write": true,
+        "signature": {
+          ".validate": "newData.hasChildren(['dataUrl', 'updatedAt'])"
+        }
+      }
+    }
+  }
+}

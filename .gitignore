@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+.pub-cache/
+.dart_tool/
+.packages
+build/
+
+# Flutter
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
+mobile/.idea/
+mobile/*.iml
+mobile/android/.gradle/
+mobile/android/local.properties
+mobile/android/app/google-services.json
+mobile/ios/
+mobile/windows/
+mobile/linux/
+mobile/macos/
+
+# Web
+web/dist/
+web/.env
+web/.env.local
+
+# Firebase secrets
+**/google-services.json
+**/GoogleService-Info.plist
+**/firebase_options.dart
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Generated
+mobile/*.g.dart

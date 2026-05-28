@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Document Signature Editor (Standalone)</title>
+  <style>
+    :root {
+      --bg: #0f1419; --surface: #1a2332; --border: #2d3f56;
+      --text: #e8eef4; --muted: #8ba3bc; --accent: #3b9eff; --ok: #34d399;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); }
+    .wrap { display: grid; grid-template-columns: 300px 1fr; min-height: 100vh; }
+    aside { background: var(--surface); border-right: 1px solid var(--border); padding: 1rem; }
+    aside h1 { font-size: 1.1rem; margin: 0 0 0.5rem; }
+    aside p { color: var(--muted); font-size: 0.85rem; line-height: 1.4; }
+    label { display: block; font-size: 0.75rem; color: var(--muted); margin: 1rem 0 0.25rem; text-transform: uppercase; }
+    input[type=text] { width: 100%; padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border); background: #243044; color: var(--text); font-size: 1rem; }
+    .row { display: flex; gap: 0.5rem; align-items: center; }
+    button { padding: 0.5rem 0.75rem; border-radius: 6px; border: 1px solid var(--border); background: #243044; color: var(--text); cursor: pointer; }
+    button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    .btn-warn { background: #553311; border-color: #884411; color: #fbbf24; }
+    .btn-danger { background: #4a1c1c; border-color: #7f1d1d; color: #fecaca; }
+    select { padding: 0.45rem; border-radius: 6px; border: 1px solid var(--border); background: #243044; color: var(--text); font-size: 0.95rem; }
+    .status { margin-top: 0.75rem; padding: 0.6rem; border-radius: 6px; font-size: 0.85rem; border: 1px solid var(--border); color: var(--muted); }
+    .status.ok { border-color: var(--ok); color: var(--ok); }
+    #sigPreview { max-width: 100%; margin-top: 0.5rem; background: repeating-conic-gradient(#999 0 25%, #eee 0 50%) 0 0/12px 12px; border-radius: 6px; display: none; }
+    main { padding: 1rem; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-bottom: 0.75rem; }
+    .toolbar span { color: var(--muted); font-size: 0.9rem; flex: 1 1 100%; margin-bottom: 0.25rem; }
+    @media (min-width: 768px) { .toolbar span { flex: 0 1 auto; margin-bottom: 0; } }
+    #pdfPageBar {
+      display: none; align-items: center; flex-wrap: wrap; gap: 0.5rem;
+      padding: 0.65rem 0.85rem; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; margin-bottom: 0.75rem;
+    }
+    #pdfPageBar.show { display: flex; }
+    #pdfPageBar label { margin: 0; text-transform: none; font-size: 0.85rem; }
+    #uploadBox { border: 2px dashed var(--border); border-radius: 8px; padding: 2rem; text-align: center; color: var(--muted); cursor: pointer; }
+    #uploadBox.hidden { display: none; }
+    #editorArea { display: none; }
+    #editorArea.show { display: block; }
+    .canvas-box { display: inline-block; box-shadow: 0 4px 24px #0008; }
+    .err { color: #fbbf24; margin-top: 0.5rem; font-size: 0.85rem; }
+    .note { margin-top: 1rem; padding: 0.75rem; background: #243044; border-radius: 6px; font-size: 0.8rem; color: var(--muted); }
+    .sig-hint { font-size: 0.78rem; color: var(--muted); margin-top: 0.35rem; }
+    #textToolBar {
+      display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;
+      padding: 0.55rem 0.75rem; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; margin-bottom: 0.75rem;
+    }
+    #textToolBar label { margin: 0; text-transform: none; font-size: 0.82rem; color: var(--muted); }
+    #insertTextInput { min-width: 140px; max-width: 220px; flex: 1 1 140px; }
+    #insertTextSize { max-width: 4.5rem; }
+    #sessionQrWrap {
+      margin-top: 10px;
+      padding: 12px;
+      background: #fff;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      text-align: center;
+    }
+    #sessionQr { display: inline-block; }
+    #sessionQr canvas, #sessionQr img { display: block; margin: 0 auto; }
+    .qr-caption { margin: 8px 0 0; font-size: 0.72rem; color: #444; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <aside>
+      <h1>Signature Editor</h1>
+      <p>Standalone HTML — copy this file to any PC. Needs internet for Firebase &amp; libraries.</p>
+
+      <label>Session ID (same as phone)</label>
+      <div class="row">
+        <input type="text" id="sessionId" maxlength="12" placeholder="ABC123" />
+        <button type="button" id="btnGen" title="New ID">↻</button>
+      </div>
+
+      <div id="sessionQrWrap">
+        <div id="sessionQr"></div>
+        <p class="qr-caption">Scan with phone (signature pad) to fill Session ID</p>
+      </div>
+
+      <div id="status" class="status">Enter Session ID</div>
+      <img id="sigPreview" alt="Signature preview" />
+      <p class="sig-hint">Each <strong>Send to PC</strong> adds a new stamp. Use <strong>Name / label</strong> on the right to type a signer name. Double‑click text on the page to edit. <strong>Delete</strong> removes the selected stamp or text.</p>
+
+      <div class="note">
+        <strong>How to use on another PC:</strong><br>
+        1. Copy <code>standalone-editor.html</code> to USB or email.<br>
+        2. Double-click to open in Chrome or Edge.<br>
+        3. Scan the QR code with the mobile signature pad, or type the same Session ID as Android / iOS web pad.
+      </div>
+    </aside>
+
+    <main>
+      <div class="toolbar">
+        <span id="docLabel">No document loaded</span>
+      </div>
+      <div class="toolbar" id="toolbarActions">
+        <button type="button" id="btnPng" disabled>Export PNG</button>
+        <button type="button" id="btnPdf" disabled class="primary">Export PDF</button>
+        <button type="button" id="btnUpload">Upload document</button>
+        <button type="button" id="btnChangeDoc" class="btn-warn">Change document</button>
+        <button type="button" id="btnDelSelected" disabled title="Or press Delete / Backspace">Remove selected</button>
+        <button type="button" id="btnClearAllSigs" disabled class="btn-danger">Clear all signatures</button>
+      </div>
+
+      <div id="textToolBar">
+        <label for="insertTextInput">Name / label</label>
+        <input type="text" id="insertTextInput" placeholder="e.g. Jane Doe" maxlength="120" disabled />
+        <label for="insertTextSize">Size</label>
+        <select id="insertTextSize" disabled>
+          <option value="12">12</option>
+          <option value="14">14</option>
+          <option value="16">16</option>
+          <option value="18" selected>18</option>
+          <option value="22">22</option>
+          <option value="28">28</option>
+        </select>
+        <label for="insertTextColor" title="Text color">Color</label>
+        <input type="color" id="insertTextColor" value="#1a1a1a" title="Text color" disabled style="width:40px;height:32px;padding:2px;border-radius:6px;border:1px solid var(--border);cursor:pointer;background:var(--surface);" />
+        <button type="button" id="btnAddText" disabled>Add text to document</button>
+        <button type="button" id="btnClearAllLabels" disabled class="btn-danger">Clear all text</button>
+      </div>
+
+      <div id="pdfPageBar">
+        <label for="pdfPageSelect"><strong>Sign on page:</strong></label>
+        <select id="pdfPageSelect"></select>
+        <button type="button" id="btnPdfPrev">‹ Prev</button>
+        <button type="button" id="btnPdfNext">Next ›</button>
+        <span id="pdfPageHint" style="color:var(--muted);font-size:0.85rem;"></span>
+      </div>
+
+      <input type="file" id="fileInput" accept=".pdf,.jpg,.jpeg,.png" style="display:none" />
+
+      <div id="uploadBox">
+        <p><strong>Drop PDF or image here</strong> or use Upload above</p>
+        <p>Supported: PDF (multi‑page — pick which page), JPG, PNG</p>
+      </div>
+      <div id="editorArea">
+        <div class="canvas-box"><canvas id="c"></canvas></div>
+      </div>
+      <p id="err" class="err"></p>
+    </main>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+  <script>
+    // ⚠️ Replace with your own Firebase project config
+    // Get yours at https://console.firebase.google.com → Project settings → Web app
+    const firebaseConfig = {
+      apiKey: 'YOUR_API_KEY',
+      authDomain: 'YOUR_PROJECT.firebaseapp.com',
+      databaseURL: 'https://YOUR_PROJECT-default-rtdb.REGION.firebasedatabase.app',
+      projectId: 'YOUR_PROJECT_ID',
+      storageBucket: 'YOUR_PROJECT.firebasestorage.app',
+      messagingSenderId: 'YOUR_SENDER_ID',
+      appId: 'YOUR_APP_ID',
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+    let fabricCanvas = null;
+    let docName = '';
+    let unsubscribe = null;
+
+    let pdfJsDoc = null;
+    let pdfByteBuffer = null;
+    let pdfPageCount = 0;
+    let currentPdfPage = 1;
+    let docIsPdf = false;
+    let lastSignatureDataUrl = null;
+    let sigIdCounter = 0;
+    let labelIdCounter = 0;
+    let deleteShortcutWired = false;
+
+    const sessionInput = document.getElementById('sessionId');
+    const statusEl = document.getElementById('status');
+    const sigPreview = document.getElementById('sigPreview');
+    const uploadBox = document.getElementById('uploadBox');
+    const editorArea = document.getElementById('editorArea');
+    const errEl = document.getElementById('err');
+    const pdfPageBar = document.getElementById('pdfPageBar');
+    const pdfPageSelect = document.getElementById('pdfPageSelect');
+    const pdfPageHint = document.getElementById('pdfPageHint');
+    const fileInput = document.getElementById('fileInput');
+    const btnDelSelected = document.getElementById('btnDelSelected');
+    const btnClearAllSigs = document.getElementById('btnClearAllSigs');
+    const insertTextInput = document.getElementById('insertTextInput');
+    const insertTextSize = document.getElementById('insertTextSize');
+    const insertTextColor = document.getElementById('insertTextColor');
+    const btnAddText = document.getElementById('btnAddText');
+    const btnClearAllLabels = document.getElementById('btnClearAllLabels');
+
+    function genId() {
+      const c = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      let s = '';
+      for (let i = 0; i < 6; i++) s += c[Math.floor(Math.random() * c.length)];
+      return s;
+    }
+
+    sessionInput.value = genId();
+
+    function updateSessionQr() {
+      const el = document.getElementById('sessionQr');
+      const sid = sessionInput.value.trim().toUpperCase();
+      el.innerHTML = '';
+      if (typeof QRCode === 'undefined') {
+        el.innerHTML = '<p style="font-size:0.75rem;color:#666">QR library loading…</p>';
+        return;
+      }
+      if (sid.length < 4) {
+        el.innerHTML = '<p style="font-size:0.75rem;color:#666">Enter at least 4 characters</p>';
+        return;
+      }
+      try {
+        new QRCode(el, {
+          text: sid,
+          width: 168,
+          height: 168,
+          colorDark: '#000000',
+          colorLight: '#ffffff',
+          correctLevel: QRCode.CorrectLevel.M,
+        });
+      } catch (err) {
+        el.innerHTML = '<p style="font-size:0.75rem;color:#b45309">' + (err.message || err) + '</p>';
+      }
+    }
+
+    document.getElementById('btnGen').onclick = () => {
+      sessionInput.value = genId();
+      updateSessionQr();
+      listenSession();
+    };
+
+    sessionInput.addEventListener('change', listenSession);
+    sessionInput.addEventListener('input', () => {
+      sessionInput.value = sessionInput.value.toUpperCase();
+      updateSessionQr();
+    });
+
+    updateSessionQr();
+
+    function listenSession() {
+      if (unsubscribe) unsubscribe();
+      const id = sessionInput.value.trim().toUpperCase();
+      if (id.length < 4) {
+        statusEl.textContent = 'Session ID must be at least 4 characters';
+        statusEl.className = 'status';
+        return;
+      }
+      statusEl.textContent = 'Listening for signatures…';
+      statusEl.className = 'status ok';
+      const ref = db.ref('sessions/' + id + '/signature');
+      ref.on('value', (snap) => {
+        const v = snap.val();
+        if (v && v.dataUrl) {
+          sigPreview.src = v.dataUrl;
+          sigPreview.style.display = 'block';
+          lastSignatureDataUrl = v.dataUrl;
+          addSignatureFromMobile(v.dataUrl);
+        }
+      });
+      unsubscribe = () => ref.off();
+    }
+
+    listenSession();
+
+    function isSignatureObj(o) {
+      return !!(o && typeof o.name === 'string' && o.name.indexOf('signature-') === 0);
+    }
+
+    function isLabelObj(o) {
+      return !!(o && typeof o.name === 'string' && o.name.indexOf('label-') === 0);
+    }
+
+    function isOverlayObj(o) {
+      return isSignatureObj(o) || isLabelObj(o);
+    }
+
+    function countSignatures() {
+      if (!fabricCanvas) return 0;
+      return fabricCanvas.getObjects().filter(isSignatureObj).length;
+    }
+
+    function countLabels() {
+      if (!fabricCanvas) return 0;
+      return fabricCanvas.getObjects().filter(isLabelObj).length;
+    }
+
+    function setTextToolsEnabled(on) {
+      insertTextInput.disabled = !on;
+      insertTextSize.disabled = !on;
+      insertTextColor.disabled = !on;
+      btnAddText.disabled = !on;
+      btnClearAllLabels.disabled = !on || countLabels() === 0;
+    }
+
+    function updateSigButtonStates() {
+      const n = countSignatures();
+      btnClearAllSigs.disabled = !fabricCanvas || n === 0;
+      const active = fabricCanvas && fabricCanvas.getActiveObject();
+      let canDel = false;
+      if (active) {
+        if (active.type === 'activeSelection') {
+          canDel = active.getObjects().some(isOverlayObj);
+        } else {
+          canDel = isOverlayObj(active);
+        }
+      }
+      btnDelSelected.disabled = !fabricCanvas || !canDel;
+      if (fabricCanvas) {
+        btnClearAllLabels.disabled = countLabels() === 0;
+      } else {
+        btnClearAllLabels.disabled = true;
+      }
+      if (docName) refreshDocTitle();
+    }
+
+    function staggerLayout() {
+      const n = countSignatures();
+      const col = n % 4;
+      const row = Math.floor(n / 4);
+      return {
+        rx: 0.38 + col * 0.1,
+        ry: 0.58 + row * 0.1,
+        widthFrac: 0.28,
+      };
+    }
+
+    function staggerLabelLayout(fontSize) {
+      const n = fabricCanvas.getObjects().filter(isLabelObj).length;
+      const col = n % 3;
+      const row = Math.floor(n / 3);
+      return {
+        rx: 0.05 + col * 0.3,
+        ry: 0.8 - row * 0.07,
+        fontSize: fontSize || 18,
+      };
+    }
+
+    /**
+     * @param {string} text - visible text
+     * @param {object} [layout] - rx, ry, fontSize, fill, width, fontFamily, fontWeight, scaleX, scaleY, angle (for restore)
+     */
+    function addTextLabel(text, layout) {
+      if (!fabricCanvas) return;
+      const raw = (text || '').trim();
+      const t = raw || 'Name / title';
+      labelIdCounter += 1;
+      const id = 'label-' + labelIdCounter;
+      const cw = fabricCanvas.width;
+      const ch = fabricCanvas.height;
+      const isFullRestore = layout && typeof layout.rx === 'number' && typeof layout.text === 'string';
+      const L = isFullRestore ? layout : Object.assign({}, staggerLabelLayout(layout && layout.fontSize), layout || {});
+      const rx = typeof L.rx === 'number' ? L.rx : 0.1;
+      const ry = typeof L.ry === 'number' ? L.ry : 0.82;
+      const fontSize = L.fontSize != null ? Number(L.fontSize) : 18;
+      const fill = L.fill || '#1a1a1a';
+      const width = L.width != null ? L.width : Math.min(280, cw * 0.45);
+
+      const tb = new fabric.Textbox(isFullRestore ? layout.text : t, {
+        name: id,
+        left: rx * cw,
+        top: ry * ch,
+        fontSize: fontSize,
+        fill: fill,
+        width: width,
+        fontFamily: L.fontFamily || "'Segoe UI', system-ui, sans-serif",
+        fontWeight: L.fontWeight || 'normal',
+        scaleX: L.scaleX != null ? L.scaleX : 1,
+        scaleY: L.scaleY != null ? L.scaleY : 1,
+        angle: L.angle != null ? L.angle : 0,
+        editable: true,
+      });
+      fabricCanvas.add(tb);
+      fabricCanvas.setActiveObject(tb);
+      fabricCanvas.requestRenderAll();
+      updateSigButtonStates();
+    }
+
+    function insertTextFromToolbar() {
+      if (!fabricCanvas) return;
+      const size = parseInt(insertTextSize.value, 10) || 18;
+      const fill = insertTextColor.value || '#1a1a1a';
+      const stagger = staggerLabelLayout(size);
+      addTextLabel(insertTextInput.value, Object.assign(stagger, { fontSize: size, fill: fill }));
+      insertTextInput.value = '';
+      insertTextInput.focus();
+    }
+
+    /**
+     * @param {string} dataUrl
+     * @param {{ rx: number; ry: number; widthFrac: number }} [layout]
+     * @returns {Promise<void>}
+     */
+    function addSignatureImage(dataUrl, layout) {
+      if (!fabricCanvas || !dataUrl) return Promise.resolve();
+      sigIdCounter += 1;
+      const id = 'signature-' + sigIdCounter;
+      const cw = fabricCanvas.width;
+      const ch = fabricCanvas.height;
+      const L = layout || staggerLayout();
+      const rx = typeof L.rx === 'number' ? L.rx : 0.55;
+      const ry = typeof L.ry === 'number' ? L.ry : 0.75;
+      const widthFrac = typeof L.widthFrac === 'number' ? Math.min(L.widthFrac, 0.55) : 0.35;
+
+      return new Promise(function (resolve) {
+        fabric.Image.fromURL(dataUrl, function (img) {
+          if (!fabricCanvas) {
+            resolve();
+            return;
+          }
+          img.set({
+            name: id,
+            left: rx * cw,
+            top: ry * ch,
+            originX: 'center',
+            originY: 'center',
+          });
+          const maxW = cw * widthFrac;
+          if (img.width > maxW) img.scaleToWidth(maxW);
+          fabricCanvas.add(img);
+          fabricCanvas.setActiveObject(img);
+          fabricCanvas.requestRenderAll();
+          updateSigButtonStates();
+          resolve();
+        }, { crossOrigin: 'anonymous' });
+      });
+    }
+
+    /** New stamp from phone: always add (do not replace). */
+    function addSignatureFromMobile(dataUrl) {
+      if (!fabricCanvas) return;
+      addSignatureImage(dataUrl, undefined);
+    }
+
+    function getOverlayLayouts() {
+      if (!fabricCanvas) return [];
+      const cw = fabricCanvas.width;
+      const ch = fabricCanvas.height;
+      if (!cw || !ch) return [];
+      const out = [];
+      fabricCanvas.getObjects().forEach(function (o) {
+        if (isSignatureObj(o)) {
+          try {
+            out.push({
+              kind: 'sig',
+              dataUrl: o.toDataURL({ format: 'png', multiplier: 1 }),
+              rx: o.left / cw,
+              ry: o.top / ch,
+              widthFrac: o.getScaledWidth() / cw,
+            });
+          } catch (err) {
+            console.warn('Could not export signature for page switch', err);
+          }
+        } else if (isLabelObj(o)) {
+          out.push({
+            kind: 'label',
+            text: o.text,
+            rx: o.left / cw,
+            ry: o.top / ch,
+            fontSize: o.fontSize,
+            fill: o.fill,
+            width: o.width,
+            scaleX: o.scaleX,
+            scaleY: o.scaleY,
+            angle: o.angle || 0,
+            fontFamily: o.fontFamily,
+            fontWeight: o.fontWeight,
+          });
+        }
+      });
+      return out;
+    }
+
+    async function restoreOverlaysFromLayouts(layouts) {
+      if (!fabricCanvas || !layouts.length) return;
+      for (let i = 0; i < layouts.length; i++) {
+        const L = layouts[i];
+        if (L.kind === 'sig') {
+          await addSignatureImage(L.dataUrl, {
+            rx: L.rx,
+            ry: L.ry,
+            widthFrac: L.widthFrac,
+          });
+        } else if (L.kind === 'label') {
+          addTextLabel(L.text, L);
+        }
+      }
+    }
+
+    function removeAllSignatureObjects() {
+      if (!fabricCanvas) return;
+      fabricCanvas.getObjects().filter(isSignatureObj).forEach(function (o) {
+        fabricCanvas.remove(o);
+      });
+      fabricCanvas.discardActiveObject();
+      fabricCanvas.requestRenderAll();
+      updateSigButtonStates();
+    }
+
+    function removeAllLabelObjects() {
+      if (!fabricCanvas) return;
+      fabricCanvas.getObjects().filter(isLabelObj).forEach(function (o) {
+        fabricCanvas.remove(o);
+      });
+      fabricCanvas.discardActiveObject();
+      fabricCanvas.requestRenderAll();
+      updateSigButtonStates();
+    }
+
+    function deleteSelectedSignatures() {
+      if (!fabricCanvas) return;
+      const obj = fabricCanvas.getActiveObject();
+      if (!obj) return;
+
+      if (obj.type === 'activeSelection') {
+        const group = obj;
+        const toRemove = group.getObjects().filter(isOverlayObj);
+        toRemove.forEach(function (o) {
+          fabricCanvas.remove(o);
+        });
+        fabricCanvas.discardActiveObject();
+      } else if (isOverlayObj(obj)) {
+        fabricCanvas.remove(obj);
+        fabricCanvas.discardActiveObject();
+      }
+
+      fabricCanvas.requestRenderAll();
+      updateSigButtonStates();
+    }
+
+    function wireCanvasEvents() {
+      if (!fabricCanvas) return;
+      fabricCanvas.on('selection:created', updateSigButtonStates);
+      fabricCanvas.on('selection:updated', updateSigButtonStates);
+      fabricCanvas.on('selection:cleared', updateSigButtonStates);
+      fabricCanvas.on('object:removed', updateSigButtonStates);
+      fabricCanvas.on('object:modified', updateSigButtonStates);
+      fabricCanvas.on('text:changed', updateSigButtonStates);
+    }
+
+    function wireDeleteShortcut() {
+      if (deleteShortcutWired) return;
+      deleteShortcutWired = true;
+      document.addEventListener('keydown', function (e) {
+        if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+        const tag = (e.target && e.target.tagName) || '';
+        if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+        if (!fabricCanvas) return;
+        deleteSelectedSignatures();
+      });
+    }
+
+    function initFabric(w, h) {
+      if (fabricCanvas) fabricCanvas.dispose();
+      fabricCanvas = new fabric.Canvas('c', { width: w, height: h, selection: true });
+      wireCanvasEvents();
+      wireDeleteShortcut();
+      uploadBox.classList.add('hidden');
+      editorArea.classList.add('show');
+      document.getElementById('btnPng').disabled = false;
+      document.getElementById('btnPdf').disabled = false;
+      setTextToolsEnabled(true);
+      updateSigButtonStates();
+    }
+
+    function attachBackgroundImage(dataUrl, w, h) {
+      return new Promise(function (resolve) {
+        fabric.Image.fromURL(dataUrl, function (bg) {
+          bg.set({ selectable: false, evented: false, name: 'background' });
+          bg.scaleToWidth(w);
+          bg.scaleToHeight(h);
+          fabricCanvas.add(bg);
+          fabricCanvas.sendToBack(bg);
+          resolve();
+        });
+      });
+    }
+
+    function refreshDocTitle() {
+      if (!docName) return;
+      const parts = [];
+      const ns = countSignatures();
+      const nl = countLabels();
+      if (ns) parts.push(ns + ' stamp(s)');
+      if (nl) parts.push(nl + ' text');
+      const extra = parts.length ? ' · ' + parts.join(', ') : '';
+      if (docIsPdf && pdfPageCount > 0) {
+        document.getElementById('docLabel').textContent =
+          docName + ' · Page ' + currentPdfPage + ' of ' + pdfPageCount + extra;
+      } else {
+        document.getElementById('docLabel').textContent = 'Document: ' + docName + extra;
+      }
+    }
+
+    async function showDocumentPage(dataUrl, w, h, preserveSigLayout) {
+      const layouts = preserveSigLayout && fabricCanvas ? getOverlayLayouts() : [];
+
+      if (!fabricCanvas) {
+        initFabric(w, h);
+        await attachBackgroundImage(dataUrl, w, h);
+        if (lastSignatureDataUrl) {
+          await addSignatureImage(lastSignatureDataUrl, undefined);
+        }
+      } else {
+        fabricCanvas.setDimensions({ width: w, height: h });
+        fabricCanvas.getObjects().filter(function (o) { return o.name === 'background'; }).forEach(function (o) {
+          fabricCanvas.remove(o);
+        });
+        fabricCanvas.getObjects().filter(isOverlayObj).forEach(function (o) {
+          fabricCanvas.remove(o);
+        });
+        await attachBackgroundImage(dataUrl, w, h);
+        await restoreOverlaysFromLayouts(layouts);
+        fabricCanvas.requestRenderAll();
+      }
+      updateSigButtonStates();
+      refreshDocTitle();
+    }
+
+    function populatePdfPageSelect() {
+      pdfPageSelect.innerHTML = '';
+      for (var p = 1; p <= pdfPageCount; p++) {
+        var opt = document.createElement('option');
+        opt.value = String(p);
+        opt.textContent = String(p);
+        pdfPageSelect.appendChild(opt);
+      }
+      pdfPageSelect.value = String(Math.min(Math.max(currentPdfPage, 1), pdfPageCount));
+    }
+
+    function updatePdfHints() {
+      if (!pdfPageCount) return;
+      pdfPageHint.textContent = 'Page ' + currentPdfPage + ' of ' + pdfPageCount +
+        ' · Export saves this visible page.';
+      pdfPageSelect.value = String(currentPdfPage);
+    }
+
+    async function rasterizePdfPage(pageNum) {
+      var page = await pdfJsDoc.getPage(pageNum);
+      var scale = 1.5;
+      var vp = page.getViewport({ scale });
+      var cvs = document.createElement('canvas');
+      cvs.width = vp.width;
+      cvs.height = vp.height;
+      await page.render({ canvasContext: cvs.getContext('2d'), viewport: vp }).promise;
+      var dataUrl = cvs.toDataURL('image/png');
+      var maxW = Math.min(900, window.innerWidth - 120);
+      var sc = maxW / vp.width;
+      return {
+        dataUrl: dataUrl,
+        w: Math.round(vp.width * sc),
+        h: Math.round(vp.height * sc),
+      };
+    }
+
+    async function goToPdfPage(pageNum, preserveLayout) {
+      if (!pdfJsDoc || pdfPageCount < 1 || pageNum < 1 || pageNum > pdfPageCount) return;
+      errEl.textContent = '';
+      var r = await rasterizePdfPage(pageNum);
+      await showDocumentPage(r.dataUrl, r.w, r.h, !!preserveLayout);
+      currentPdfPage = pageNum;
+      updatePdfHints();
+      refreshDocTitle();
+    }
+
+    async function loadPdf(file) {
+      docIsPdf = true;
+      pdfByteBuffer = await file.arrayBuffer();
+      pdfJsDoc = await pdfjsLib.getDocument({ data: pdfByteBuffer.slice(0) }).promise;
+      pdfPageCount = pdfJsDoc.numPages;
+      populatePdfPageSelect();
+      if (pdfPageCount > 1) {
+        pdfPageBar.classList.add('show');
+      } else {
+        pdfPageBar.classList.remove('show');
+      }
+      docName = file.name;
+      await goToPdfPage(1, false);
+    }
+
+    async function loadImage(file) {
+      docIsPdf = false;
+      pdfJsDoc = null;
+      pdfByteBuffer = null;
+      pdfPageCount = 0;
+      pdfPageBar.classList.remove('show');
+
+      var dataUrl = await readFile(file);
+      var img = await loadImg(dataUrl);
+      var maxW = Math.min(900, window.innerWidth - 120);
+      var sc = maxW / img.width;
+      var w = Math.round(img.width * sc);
+      var h = Math.round(img.height * sc);
+      await showDocumentPage(dataUrl, w, h, false);
+      docName = file.name;
+      refreshDocTitle();
+    }
+
+    function resetWorkspace() {
+      pdfJsDoc = null;
+      pdfByteBuffer = null;
+      pdfPageCount = 0;
+      currentPdfPage = 1;
+      docIsPdf = false;
+      sigIdCounter = 0;
+      labelIdCounter = 0;
+
+      pdfPageBar.classList.remove('show');
+      pdfPageSelect.innerHTML = '';
+
+      if (fabricCanvas) {
+        fabricCanvas.dispose();
+        fabricCanvas = null;
+      }
+
+      uploadBox.classList.remove('hidden');
+      editorArea.classList.remove('show');
+
+      document.getElementById('btnPng').disabled = true;
+      document.getElementById('btnPdf').disabled = true;
+      btnDelSelected.disabled = true;
+      btnClearAllSigs.disabled = true;
+      setTextToolsEnabled(false);
+      document.getElementById('docLabel').textContent = 'No document loaded';
+      errEl.textContent = '';
+      fileInput.value = '';
+    }
+
+    function readFile(file) {
+      return new Promise(function (res, rej) {
+        var r = new FileReader();
+        r.onload = function () { res(r.result); };
+        r.onerror = rej;
+        r.readAsDataURL(file);
+      });
+    }
+
+    function loadImg(src) {
+      return new Promise(function (res, rej) {
+        var i = new Image();
+        i.onload = function () { res(i); };
+        i.onerror = rej;
+        i.src = src;
+      });
+    }
+
+    function exportStem() {
+      if (!docName) return 'document';
+      var m = docName.replace(/[/\\]+$/, '').match(/^(.+)(\.[^.]+)$/);
+      var base = m ? m[1] : docName;
+      if (docIsPdf && pdfPageCount > 0) base += '-p' + currentPdfPage;
+      return 'signed-' + base;
+    }
+
+    async function handleFile(file) {
+      if (!file) return;
+      errEl.textContent = '';
+      var ext = (file.name.split('.').pop() || '').toLowerCase();
+      try {
+        if (ext === 'pdf') await loadPdf(file);
+        else if (['jpg', 'jpeg', 'png'].includes(ext)) await loadImage(file);
+        else errEl.textContent = 'Use PDF, JPG, or PNG.';
+      } catch (e) {
+        errEl.textContent = e.message || String(e);
+      }
+    }
+
+    fileInput.onchange = function (e) { handleFile(e.target.files && e.target.files[0]); };
+
+    pdfPageSelect.addEventListener('change', function () {
+      var pn = parseInt(pdfPageSelect.value, 10);
+      if (Number.isFinite(pn)) goToPdfPage(pn, true);
+    });
+
+    document.getElementById('btnPdfPrev').onclick = function () {
+      if (!docIsPdf) return;
+      if (currentPdfPage > 1) goToPdfPage(currentPdfPage - 1, true);
+    };
+
+    document.getElementById('btnPdfNext').onclick = function () {
+      if (!docIsPdf) return;
+      if (currentPdfPage < pdfPageCount) goToPdfPage(currentPdfPage + 1, true);
+    };
+
+    document.getElementById('btnUpload').onclick = function () { fileInput.click(); };
+
+    document.getElementById('btnChangeDoc').onclick = function () {
+      resetWorkspace();
+      fileInput.click();
+    };
+
+    btnDelSelected.onclick = function () { deleteSelectedSignatures(); };
+
+    btnClearAllSigs.onclick = function () {
+      if (!fabricCanvas || countSignatures() === 0) return;
+      if (window.confirm('Remove all signature stamps from this page?')) {
+        removeAllSignatureObjects();
+      }
+    };
+
+    insertTextInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' && !insertTextInput.disabled) {
+        e.preventDefault();
+        insertTextFromToolbar();
+      }
+    });
+
+    btnAddText.onclick = function () {
+      insertTextFromToolbar();
+    };
+
+    btnClearAllLabels.onclick = function () {
+      if (!fabricCanvas || countLabels() === 0) return;
+      if (window.confirm('Remove all name / text labels from this page?')) {
+        removeAllLabelObjects();
+      }
+    };
+
+    uploadBox.ondragover = function (e) { e.preventDefault(); };
+    uploadBox.ondrop = function (e) {
+      e.preventDefault();
+      handleFile(e.dataTransfer.files && e.dataTransfer.files[0]);
+    };
+    uploadBox.onclick = function () { fileInput.click(); };
+
+    document.getElementById('btnPng').onclick = function () {
+      if (!fabricCanvas) return;
+      download(fabricCanvas.toDataURL({ format: 'png', multiplier: 2 }), exportStem() + '.png');
+    };
+
+    document.getElementById('btnPdf').onclick = function () {
+      if (!fabricCanvas) return;
+      var dataUrl = fabricCanvas.toDataURL({ format: 'png', multiplier: 2 });
+      var jsPDFCtor = window.jspdf && window.jspdf.jsPDF ? window.jspdf.jsPDF : null;
+      var img = new Image();
+      img.onload = function () {
+        var pdf = new jsPDFCtor({
+          orientation: img.width > img.height ? 'landscape' : 'portrait',
+          unit: 'px',
+          format: [img.width, img.height],
+        });
+        pdf.addImage(dataUrl, 'PNG', 0, 0, img.width, img.height);
+        pdf.save(exportStem() + '.pdf');
+      };
+      img.src = dataUrl;
+    };
+
+    function download(dataUrl, name) {
+      var a = document.createElement('a');
+      a.href = dataUrl;
+      a.download = name;
+      a.click();
+    }
+  </script>
+</body>
+</html>

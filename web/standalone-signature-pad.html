@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#0f1419" />
+  <title>Sign — Mobile</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --surface: #1a2332;
+      --border: #2d3f56;
+      --text: #e8eef4;
+      --muted: #8ba3bc;
+      --accent: #3b9eff;
+      --ok: #34d399;
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+      --safe-top: env(safe-area-inset-top, 0px);
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      touch-action: manipulation;
+    }
+    .app {
+      max-width: 640px;
+      margin: 0 auto;
+      padding: calc(12px + var(--safe-top)) 16px calc(16px + var(--safe-bottom));
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    h1 { font-size: 1.25rem; margin: 0; font-weight: 700; }
+    .sub { color: var(--muted); font-size: 0.88rem; line-height: 1.45; margin: 0; }
+    label { display: block; font-size: 0.72rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
+    .row { display: flex; gap: 8px; align-items: stretch; flex-wrap: wrap; }
+    input[type="text"] {
+      flex: 1 1 140px;
+      padding: 12px 14px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: #243044;
+      color: var(--text);
+      font-size: 1.05rem;
+      min-height: 48px;
+    }
+    button {
+      padding: 12px 16px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      min-height: 48px;
+      touch-action: manipulation;
+    }
+    button:active { opacity: 0.85; }
+    button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    button.danger { background: #3f1d1d; border-color: #7f1d1d; color: #fecaca; }
+    button.secondary { background: #243044; }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    .pad-wrap {
+      position: relative;
+      flex: 1 1 auto;
+      min-height: min(58vh, 620px);
+      max-height: 72vh;
+      border-radius: 14px;
+      border: 2px solid var(--border);
+      overflow: hidden;
+      background: #2a3544;
+    }
+    #drawCanvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      touch-action: none;
+      cursor: crosshair;
+    }
+    .tools {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      padding: 12px;
+      background: var(--surface);
+      border-radius: 12px;
+      border: 1px solid var(--border);
+    }
+    .chip {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: 3px solid transparent;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .chip.on { border-color: var(--accent); }
+    .chip.black { background: #111; }
+    .chip.blue { background: #1565c0; }
+    .slider-row { flex: 1 1 140px; display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .slider-row span { font-size: 0.8rem; color: var(--muted); white-space: nowrap; }
+    input[type="range"] { flex: 1; accent-color: var(--accent); }
+    .status {
+      padding: 10px 12px;
+      border-radius: 10px;
+      font-size: 0.88rem;
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+    .status.ok { border-color: rgba(52, 211, 153, 0.45); color: var(--ok); }
+    .status.err { border-color: #b45309; color: #fbbf24; }
+    .note { font-size: 0.8rem; color: var(--muted); line-height: 1.45; margin: 0; }
+    .qr-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 10000;
+      background: rgba(0, 0, 0, 0.88);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: max(16px, var(--safe-top)) 16px max(16px, var(--safe-bottom));
+    }
+    .qr-modal.show { display: flex; }
+    .qr-modal-inner {
+      background: var(--surface);
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      padding: 16px;
+      width: 100%;
+      max-width: 400px;
+      max-height: 90vh;
+      overflow: auto;
+    }
+    .qr-modal-inner p { margin: 0 0 12px; font-size: 0.9rem; color: var(--muted); }
+    #qrReader {
+      border-radius: 12px;
+      overflow: hidden;
+      background: #000;
+      min-height: 240px;
+    }
+    #qrReader video { border-radius: 12px; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <h1>Draw signature</h1>
+    <p class="sub">Scan the <strong>QR code on the PC</strong> to connect, or type the Session ID. White area is only for drawing — the PC still receives a <strong>transparent PNG</strong>.</p>
+
+    <div>
+      <label for="sessionId">Session ID</label>
+      <div class="row">
+        <input type="text" id="sessionId" maxlength="12" placeholder="ABC123" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" />
+        <button type="button" id="btnGen" title="New ID">↻</button>
+      </div>
+      <div class="row" style="margin-top: 8px;">
+        <button type="button" class="secondary" id="btnScanQr" style="flex:1">Scan PC QR code</button>
+      </div>
+    </div>
+
+    <div id="status" class="status">Enter Session ID (4+ characters) or scan QR</div>
+
+    <div class="tools">
+      <span style="font-size:0.75rem;color:var(--muted);font-weight:600;">Ink</span>
+      <button type="button" class="chip black on" id="chipBlack" aria-label="Black"></button>
+      <button type="button" class="chip blue" id="chipBlue" aria-label="Blue"></button>
+      <div class="slider-row">
+        <span>Width</span>
+        <input type="range" id="strokeWidth" min="2" max="14" step="1" value="4" />
+      </div>
+    </div>
+
+    <div class="pad-wrap" id="padWrap">
+      <canvas id="drawCanvas"></canvas>
+    </div>
+
+    <div class="row">
+      <button type="button" class="danger" id="btnClear">Clear</button>
+      <button type="button" class="primary" id="btnSend" style="flex:2">Send to PC</button>
+    </div>
+
+    <p class="note">The pad shows a <strong>white</strong> background so ink is easy to see. <strong>Send to PC</strong> uploads only your strokes (transparent PNG), same as before.</p>
+  </div>
+
+  <div id="qrModal" class="qr-modal" aria-hidden="true">
+    <div class="qr-modal-inner">
+      <p><strong>Scan the QR code</strong> shown on the PC editor sidebar (Session ID).</p>
+      <div id="qrReader"></div>
+      <div class="row" style="margin-top: 14px;">
+        <button type="button" class="danger" id="qrCancel" style="flex:1">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
+
+  <script>
+    // ⚠️ Replace with your own Firebase project config
+    // Get yours at https://console.firebase.google.com → Project settings → Web app
+    const firebaseConfig = {
+      apiKey: 'YOUR_API_KEY',
+      authDomain: 'YOUR_PROJECT.firebaseapp.com',
+      databaseURL: 'https://YOUR_PROJECT-default-rtdb.REGION.firebasedatabase.app',
+      projectId: 'YOUR_PROJECT_ID',
+      storageBucket: 'YOUR_PROJECT.firebasestorage.app',
+      messagingSenderId: 'YOUR_SENDER_ID',
+      appId: 'YOUR_APP_ID',
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    const canvas = document.getElementById('drawCanvas');
+    const ctx = canvas.getContext('2d');
+    const padWrap = document.getElementById('padWrap');
+    const sessionInput = document.getElementById('sessionId');
+    const statusEl = document.getElementById('status');
+    const btnSend = document.getElementById('btnSend');
+    const strokeWidthEl = document.getElementById('strokeWidth');
+    const qrModal = document.getElementById('qrModal');
+
+    let penColor = '#111111';
+    let logicalW = 300;
+    let logicalH = 300;
+    /** @type {{ color: string; pts: { x: number; y: number }[] }[]} */
+    let strokes = [];
+    /** @type {{ color: string; pts: { x: number; y: number }[] } | null} */
+    let currentStroke = null;
+    /** @type {import('html5-qrcode').Html5Qrcode | null} */
+    let html5Qr = null;
+
+    function genId() {
+      const c = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      let s = '';
+      for (let i = 0; i < 6; i++) s += c[Math.floor(Math.random() * c.length)];
+      return s;
+    }
+
+    sessionInput.value = genId();
+
+    /** White background only for on-screen pad */
+    function fillPadBackground() {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, logicalW, logicalH);
+    }
+
+    function resizeCanvas() {
+      const rect = padWrap.getBoundingClientRect();
+      const dpr = Math.min(window.devicePixelRatio || 1, 3);
+      logicalW = Math.max(240, Math.floor(rect.width));
+      logicalH = Math.max(280, Math.floor(rect.height));
+      canvas.width = Math.floor(logicalW * dpr);
+      canvas.height = Math.floor(logicalH * dpr);
+      canvas.style.width = logicalW + 'px';
+      canvas.style.height = logicalH + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      redrawAll();
+    }
+
+    function redrawAll() {
+      ctx.clearRect(0, 0, logicalW, logicalH);
+      fillPadBackground();
+      const lw = parseFloat(strokeWidthEl.value) || 4;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      function paintStrokePts(pts, color, width) {
+        if (!pts || pts.length === 0) return;
+        ctx.strokeStyle = color;
+        ctx.fillStyle = color;
+        ctx.lineWidth = width;
+        if (pts.length === 1) {
+          ctx.beginPath();
+          ctx.arc(pts[0].x, pts[0].y, width / 2, 0, Math.PI * 2);
+          ctx.fill();
+          return;
+        }
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (let i = 1; i < pts.length; i++) {
+          ctx.lineTo(pts[i].x, pts[i].y);
+        }
+        ctx.stroke();
+      }
+
+      strokes.forEach(function (s) {
+        paintStrokePts(s.pts, s.color, lw);
+      });
+    }
+
+    function getPointer(e) {
+      const rect = canvas.getBoundingClientRect();
+      let cx;
+      let cy;
+      if (e.touches && e.touches.length) {
+        cx = e.touches[0].clientX;
+        cy = e.touches[0].clientY;
+      } else if (e.changedTouches && e.changedTouches.length) {
+        cx = e.changedTouches[0].clientX;
+        cy = e.changedTouches[0].clientY;
+      } else {
+        cx = e.clientX;
+        cy = e.clientY;
+      }
+      return {
+        x: ((cx - rect.left) / rect.width) * logicalW,
+        y: ((cy - rect.top) / rect.height) * logicalH,
+      };
+    }
+
+    function beginStroke(e) {
+      if (e.cancelable) e.preventDefault();
+      const p = getPointer(e);
+      currentStroke = { color: penColor, pts: [p] };
+      strokes.push(currentStroke);
+      const lw = parseFloat(strokeWidthEl.value) || 4;
+      ctx.strokeStyle = penColor;
+      ctx.fillStyle = penColor;
+      ctx.lineWidth = lw;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, lw / 2, 0, Math.PI * 2);
+      ctx.fill();
+      try {
+        if (e.pointerId != null) canvas.setPointerCapture(e.pointerId);
+      } catch (ignore) {}
+    }
+
+    function moveStroke(e) {
+      if (!currentStroke) return;
+      if (e.cancelable) e.preventDefault();
+      const p = getPointer(e);
+      const pts = currentStroke.pts;
+      const last = pts[pts.length - 1];
+      if (last && Math.abs(last.x - p.x) < 0.5 && Math.abs(last.y - p.y) < 0.5) return;
+      pts.push(p);
+
+      const lw = parseFloat(strokeWidthEl.value) || 4;
+      ctx.strokeStyle = currentStroke.color;
+      ctx.lineWidth = lw;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      ctx.moveTo(last.x, last.y);
+      ctx.lineTo(p.x, p.y);
+      ctx.stroke();
+    }
+
+    function endStroke(e) {
+      if (e && e.cancelable) e.preventDefault();
+      try {
+        if (e && e.pointerId != null) canvas.releasePointerCapture(e.pointerId);
+      } catch (ignore) {}
+      currentStroke = null;
+    }
+
+    if (window.PointerEvent) {
+      canvas.addEventListener('pointerdown', function (e) {
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        beginStroke(e);
+      }, { passive: false });
+      canvas.addEventListener('pointermove', function (e) {
+        if (!currentStroke) return;
+        if (!((e.buttons & 1) || e.pointerType === 'touch' || e.pointerType === 'pen')) return;
+        moveStroke(e);
+      }, { passive: false });
+      canvas.addEventListener('pointerup', endStroke, { passive: false });
+      canvas.addEventListener('pointercancel', endStroke, { passive: false });
+      canvas.addEventListener('pointerleave', function (e) {
+        if (e.pointerType === 'mouse') endStroke(e);
+      });
+    } else {
+      canvas.addEventListener('touchstart', beginStroke, { passive: false });
+      canvas.addEventListener('touchmove', moveStroke, { passive: false });
+      canvas.addEventListener('touchend', endStroke, { passive: false });
+      canvas.addEventListener('touchcancel', endStroke, { passive: false });
+      canvas.addEventListener('mousedown', function (e) {
+        if (e.button !== 0) return;
+        beginStroke(e);
+      });
+      canvas.addEventListener('mousemove', function (e) {
+        if (!(e.buttons & 1)) return;
+        moveStroke(e);
+      });
+      canvas.addEventListener('mouseup', endStroke);
+      canvas.addEventListener('mouseleave', endStroke);
+    }
+
+    function sessionIdValid() {
+      return sessionInput.value.trim().length >= 4;
+    }
+
+    function setStatus(msg, cls) {
+      statusEl.textContent = msg;
+      statusEl.className = 'status' + (cls ? ' ' + cls : '');
+    }
+
+    function parseSessionFromQr(raw) {
+      const t = String(raw || '').trim();
+      if (!t) return null;
+      const lettersOnly = t.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+      if (/^[A-Z0-9]{4,12}$/.test(lettersOnly)) return lettersOnly.slice(0, 12);
+      try {
+        const u = new URL(t);
+        const q = (u.searchParams.get('sid') || u.searchParams.get('session') || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+        if (/^[A-Z0-9]{4,12}$/.test(q)) return q.slice(0, 12);
+      } catch (err) { /* not a URL */ }
+      const m = t.match(/\b([A-Z0-9]{4,12})\b/i);
+      return m ? m[1].toUpperCase() : null;
+    }
+
+    async function stopQrScanner() {
+      qrModal.classList.remove('show');
+      qrModal.setAttribute('aria-hidden', 'true');
+      if (html5Qr) {
+        try {
+          await html5Qr.stop();
+        } catch (e) { /* already stopped */ }
+        try {
+          await html5Qr.clear();
+        } catch (e2) { /* ignore */ }
+        html5Qr = null;
+      }
+      document.getElementById('qrReader').innerHTML = '';
+    }
+
+    document.getElementById('qrCancel').onclick = function () {
+      stopQrScanner();
+    };
+
+    document.getElementById('btnScanQr').onclick = async function () {
+      if (typeof Html5Qrcode === 'undefined') {
+        setStatus('QR scanner library failed to load. Type Session ID manually.', 'err');
+        return;
+      }
+      await stopQrScanner();
+      qrModal.classList.add('show');
+      qrModal.setAttribute('aria-hidden', 'false');
+
+      const readerEl = document.getElementById('qrReader');
+      readerEl.innerHTML = '';
+
+      html5Qr = new Html5Qrcode('qrReader');
+      const camConfig = { facingMode: 'environment' };
+      const w = Math.min(280, window.innerWidth - 48);
+      const config = { fps: 12, qrbox: { width: w, height: w } };
+
+      try {
+        await html5Qr.start(
+          camConfig,
+          config,
+          function onScan(decodedText) {
+            const sid = parseSessionFromQr(decodedText);
+            if (sid) {
+              sessionInput.value = sid;
+              sessionInput.dispatchEvent(new Event('change'));
+              setStatus('Session ID set from QR.', 'ok');
+              stopQrScanner();
+            }
+          },
+          function () { /* ignore frame errors */ },
+        );
+      } catch (err) {
+        setStatus('Camera error: ' + (err.message || String(err)) + ' — type ID manually.', 'err');
+        stopQrScanner();
+      }
+    };
+
+    document.getElementById('btnGen').onclick = function () {
+      sessionInput.value = genId();
+      setStatus('Session ID updated. Enter this on PC or scan from PC QR.', 'ok');
+    };
+
+    sessionInput.addEventListener('input', function () {
+      sessionInput.value = sessionInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    });
+
+    sessionInput.addEventListener('change', function () {
+      if (sessionIdValid()) setStatus('Ready — draw below, then Send to PC.', 'ok');
+      else setStatus('Session ID must be at least 4 characters', 'err');
+    });
+
+    document.getElementById('chipBlack').onclick = function () {
+      penColor = '#111111';
+      document.getElementById('chipBlack').classList.add('on');
+      document.getElementById('chipBlue').classList.remove('on');
+      redrawAll();
+    };
+
+    document.getElementById('chipBlue').onclick = function () {
+      penColor = '#1565c0';
+      document.getElementById('chipBlue').classList.add('on');
+      document.getElementById('chipBlack').classList.remove('on');
+      redrawAll();
+    };
+
+    strokeWidthEl.addEventListener('input', redrawAll);
+
+    document.getElementById('btnClear').onclick = function () {
+      strokes = [];
+      currentStroke = null;
+      redrawAll();
+    };
+
+    /** PNG with transparent background only — no white fill */
+    function strokesToPngDataUrl() {
+      const hasInk = strokes.some(function (s) { return s.pts && s.pts.length > 0; });
+      if (!hasInk) return null;
+
+      const exportScale = 3;
+      const w = Math.round(logicalW * exportScale);
+      const h = Math.round(logicalH * exportScale);
+      const off = document.createElement('canvas');
+      off.width = w;
+      off.height = h;
+      const octx = off.getContext('2d');
+      const lw = (parseFloat(strokeWidthEl.value) || 4) * exportScale;
+
+      octx.clearRect(0, 0, w, h);
+      octx.lineCap = 'round';
+      octx.lineJoin = 'round';
+
+      strokes.forEach(function (stroke) {
+        const pts = stroke.pts;
+        if (!pts.length) return;
+        octx.strokeStyle = stroke.color;
+        octx.fillStyle = stroke.color;
+        octx.lineWidth = lw;
+        if (pts.length === 1) {
+          octx.beginPath();
+          octx.arc(pts[0].x * exportScale, pts[0].y * exportScale, lw / 2, 0, Math.PI * 2);
+          octx.fill();
+          return;
+        }
+        octx.beginPath();
+        octx.moveTo(pts[0].x * exportScale, pts[0].y * exportScale);
+        for (let i = 1; i < pts.length; i++) {
+          octx.lineTo(pts[i].x * exportScale, pts[i].y * exportScale);
+        }
+        octx.stroke();
+      });
+
+      return off.toDataURL('image/png');
+    }
+
+    btnSend.onclick = async function () {
+      if (!sessionIdValid()) {
+        setStatus('Set Session ID first (4+ characters).', 'err');
+        return;
+      }
+      const dataUrl = strokesToPngDataUrl();
+      if (!dataUrl) {
+        setStatus('Draw something first.', 'err');
+        return;
+      }
+
+      btnSend.disabled = true;
+      setStatus('Sending…');
+
+      try {
+        const sid = sessionInput.value.trim().toUpperCase();
+        await db.ref('sessions/' + sid + '/signature').set({
+          dataUrl: dataUrl,
+          updatedAt: firebase.database.ServerValue.TIMESTAMP,
+          source: 'ios-web',
+        });
+        setStatus('Sent! Check your PC editor.', 'ok');
+      } catch (err) {
+        setStatus('Send failed: ' + (err.message || String(err)), 'err');
+      } finally {
+        btnSend.disabled = false;
+      }
+    };
+
+    window.addEventListener('resize', function () {
+      clearTimeout(window.__sigResizeT);
+      window.__sigResizeT = setTimeout(resizeCanvas, 80);
+    });
+
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', function () {
+        clearTimeout(window.__sigResizeT);
+        window.__sigResizeT = setTimeout(resizeCanvas, 80);
+      });
+    }
+
+    if (sessionIdValid()) setStatus('Ready — draw below, then Send to PC.', 'ok');
+
+    resizeCanvas();
+  </script>
+</body>
+</html>
